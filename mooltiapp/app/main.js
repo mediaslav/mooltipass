@@ -1,20 +1,18 @@
 'use strict'
 
-const electron = require('electron')
-const app = electron.app
-const Tray = electron.Tray;
-const dialog = require('electron').dialog
-const ipc = require('electron').ipcMain
 const path = require('path')
+const url = require('url')
+
+const electron = require('electron')
+const {app, Tray, dialog, Menu} = electron
+const ipc = electron.ipcMain
+
 const pjson = require('./package.json')
 const _ = require('lodash')
-const windowStateKeeper = require('electron-window-state');
-
-const Menu = require('electron').Menu; 
+const windowStateKeeper = require('electron-window-state')
 
 // Use system log facility, should work on Windows too
-require('./lib/log')(pjson.productName || 'SkelEktron');
-
+require('./lib/log')(pjson.productName || 'SkelEktron')
 
 // Manage unhandled exceptions as early as possible
 process.on('uncaughtException', (e) => {
@@ -22,7 +20,6 @@ process.on('uncaughtException', (e) => {
   dialog.showErrorBox('Caught unhandled exception', e.message || 'Unknown error message')
   app.quit()
 })
-
 
 // Load build target configuration file
 try {
@@ -45,9 +42,12 @@ console.debug(JSON.stringify(pjson.config))
 
 // Adds debug features like hotkeys for triggering dev tools and reload
 // (disabled in production, unless the menu item is displayed)
-require('electron-debug')({
-  enabled: pjson.config.debug || isDev || false
-})
+const isElectronDebugEnabled = pjson.config.debug || isDev || false
+if (isElectronDebugEnabled) {
+  require('electron-debug')({
+    enabled: isElectronDebugEnabled
+  })
+}
 
 // Prevent window being garbage collected
 let mainWindow
@@ -61,7 +61,7 @@ function initialize () {
   function onClosed () {
     // Dereference used windows
     // for multiple windows store them in an array
-    mainWindow = null;
+    mainWindow = null
   }
 
   function createMainWindow () {
@@ -78,41 +78,45 @@ function initialize () {
       'x': mainWindowState.x,
       'y': mainWindowState.y,
       'title': app.getName(),
-      'icon': path.join(__dirname, '/chrome_app/images/icons/AppIcon_128.png'),
+      'icon': path.join(__dirname, 'chrome_app', 'images', 'icons', 'AppIcon_128.png'),
       'show': false, // Hide your application until your page has loaded
       'webPreferences': {
         'nodeIntegration': pjson.config.nodeIntegration || true, // Disabling node integration allows to use libraries such as jQuery/React, etc
-        'preload': path.resolve(path.join(__dirname, 'preload.js'))
+        'preload': path.join(__dirname, 'preload.js')
       }
-    });
+    })
 
     // works only on Windows and Linux
-    win.setMenu(null);
-    win.setResizable(false);
-    win.setSize(820, 620);
+    win.setMenu(null)
+    win.setResizable(false)
+    win.setSize(820, 620)
 
     // Let us register listeners on the window, so we can update the state
     // automatically (the listeners will be removed when the window is closed)
     // and restore the maximized or full screen state
-    mainWindowState.manage(win);
+    mainWindowState.manage(win)
 
     // EXPERIMENTAL: Minimize to tray
-    win.on('minimize',function(event){
-      event.preventDefault();
-      win.hide();
-    });
+    win.on('minimize', function (event) {
+      event.preventDefault()
+      win.hide()
+    })
 
     // EXPERIMENTAL: Minimize to tray
     win.on('close', function (event) {
-      if( !app.isQuiting ) {
+      if (!app.isQuiting) {
         event.preventDefault()
-        win.hide();
-        app.dock.hide();
+        win.hide()
+        if (process.platform === 'darwin') app.dock.hide()
       }
-      return false;
-    });
+      return false
+    })
 
-    win.loadURL(`file://${__dirname}/${pjson.config.url}`, {})
+    win.loadURL(url.format({
+      pathname: path.join(__dirname, pjson.config.url),
+      protocol: 'file:',
+      slashes: true
+    }))
 
     win.on('closed', onClosed)
 
@@ -139,6 +143,7 @@ function initialize () {
       }
 
       error.sender.loadURL(`file://${__dirname}/error.html`)
+
       win.webContents.on('did-finish-load', () => {
         win.webContents.send('app-error', errorMessage)
       })
@@ -159,32 +164,38 @@ function initialize () {
   })
 
   app.on('activate', () => {
-    setTimeout( function() {
+    setTimeout(function () {
       if (!mainWindow) {
         mainWindow = createMainWindow()
       }
-    }.bind(this),500);
+    }, 500)
   })
 
-  let tray = null;
+  let tray = null
   app.on('ready', () => {
-    mainWindow = createMainWindow();
+    mainWindow = createMainWindow()
 
-    tray = new Tray( path.join(__dirname, '../chrome_app/images/icons/icon_cross_16.png') );
+    tray = new Tray(path.join(__dirname, 'chrome_app', 'images', 'icons', 'icon_cross_16.png'))
 
-    var contextMenu = Menu.buildFromTemplate([
-        { label: 'Show App', click:  function(){
-            mainWindow.show();
-            app.dock.show();
-        } },
-        { label: 'Quit', click:  function(){
-            app.isQuiting = true;
-            app.quit();
-        } }
-    ]);
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Show App',
+        click: function () {
+          mainWindow.show()
+          if (process.platform === 'darwin') app.dock.show()
+        }
+      },
+      {
+        label: 'Quit',
+        click: function () {
+          app.isQuiting = true
+          app.quit()
+        }
+      }
+    ])
 
-    tray.setToolTip('Open or Quit MooltiApp');
-    tray.setContextMenu(contextMenu);
+    tray.setToolTip('Open or Quit MooltiApp')
+    tray.setContextMenu(contextMenu)
 
     // Manage automatic updates
     try {
