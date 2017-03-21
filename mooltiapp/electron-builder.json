@@ -3,6 +3,15 @@
   "productName": "Mooltipass",
   "artifactName": "${productName}-${arch}-${version}.${ext}",
   "asar": true,
+  "files": [
+    "**/*",
+    "!**/node_modules/*/build{,/**}",
+    "**/node_modules/*/build/Release/*.node",
+    "!**/node_modules/node-hid/{src,hidapi}{,/**}",
+    "!**/node_modules/nan{,/**}",
+    "!**/node_modules/underscore/underscore-min.js",
+    "!**/*.{map,ts}"
+  ],
   "dmg": {
     "iconSize": 120,
     "iconTextSize": 14,
