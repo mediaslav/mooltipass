@@ -2,14 +2,22 @@
 
 const path = require('path')
 const url = require('url')
+const _ = require('lodash')
 
 const electron = require('electron')
 const {app, Tray, dialog, Menu} = electron
 const ipc = electron.ipcMain
 
-const pjson = require('./package.json')
-const _ = require('lodash')
 const windowStateKeeper = require('electron-window-state')
+const autoUpdater = require('electron-updater').autoUpdater
+const log = require('electron-log')
+autoUpdater.logger = log
+autoUpdater.logger.transports.file.level = 'info'
+// autoUpdater.autoDownload = false
+autoUpdater.autoDownload = true
+let isReadyToUpdate = false
+
+const pjson = require('./package.json')
 
 // Use system log facility, should work on Windows too
 require('./lib/log')(pjson.productName || 'SkelEktron')
@@ -23,7 +31,7 @@ process.on('uncaughtException', (e) => {
 
 // Load build target configuration file
 try {
-  var config = require('./config.json')
+  let config = require('./config.json')
   _.merge(pjson.config, config)
 } catch (e) {
   console.warn('No config file loaded, using defaults')
@@ -54,8 +62,10 @@ let mainWindow
 
 app.setName(pjson.productName || 'Mooltipass')
 
+initialize()
+
 function initialize () {
-  var shouldQuit = makeSingleInstance()
+  let shouldQuit = makeSingleInstance()
   if (shouldQuit) return app.quit()
 
   function onClosed () {
@@ -197,37 +207,7 @@ function initialize () {
     tray.setToolTip('Open or Quit MooltiApp')
     tray.setContextMenu(contextMenu)
 
-    // Manage automatic updates
-    try {
-      require('./lib/auto-update/update')({
-        url: (pjson.config.update) ? pjson.config.update.url || false : false,
-        version: app.getVersion()
-      })
-      ipc.on('update-downloaded', (autoUpdater) => {
-        // Elegant solution: display unobtrusive notification messages
-        mainWindow.webContents.send('update-downloaded')
-        ipc.on('update-and-restart', () => {
-          autoUpdater.quitAndInstall()
-        })
-
-        // Basic solution: display a message box to the user
-        // var updateNow = dialog.showMessageBox(mainWindow, {
-        //   type: 'question',
-        //   buttons: ['Yes', 'No'],
-        //   defaultId: 0,
-        //   cancelId: 1,
-        //   title: 'Update available',
-        //   message: 'There is an update available, do you want to restart and install it now?'
-        // })
-        //
-        // if (updateNow === 0) {
-        //   autoUpdater.quitAndInstall()
-        // }
-      })
-    } catch (e) {
-      console.error(e.message)
-      dialog.showErrorBox('Update Error', e.message)
-    }
+    autoUpdater.checkForUpdates()
   })
 
   app.on('will-quit', () => { })
@@ -249,6 +229,19 @@ function makeSingleInstance () {
   })
 }
 
-// Manage Squirrel startup event (Windows)
-require('./lib/auto-update/startup')(initialize)
-
+autoUpdater.on('update-downloaded', (event, info) => {
+  // log.info('@update-downloaded@\n', info, event)
+  isReadyToUpdate = true
+  // Ask user to update the app
+  dialog.showMessageBox({
+    type: 'question',
+    buttons: ['Install and Relaunch', 'Later'],
+    defaultId: 0,
+    message: 'A new version of ' + app.getName() + ' has been downloaded',
+    detail: 'It will be installed when you restart the application'
+  }, response => {
+    if (response === 0) {
+      setTimeout(() => autoUpdater.quitAndInstall(), 7)
+    }
+  })
+})
