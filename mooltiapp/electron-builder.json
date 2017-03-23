@@ -53,5 +53,9 @@
     "perMachine": true,
     "unicode": false
   },
-  "iconUrl": "https://github.com/limpkin/mooltipass/blob/master/chrome_app/images/icons/Plain_128.png?raw=true"
+  "publish": [
+    {
+      "provider": "github"
+    }
+  ]
 }
